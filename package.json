@@ -1,0 +1,42 @@
+{
+  "name": "vanta-eye",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "node scripts/migrate.mjs",
+    "db:seed": "node scripts/seed.mjs",
+    "setup": "node scripts/migrate.mjs && node scripts/seed.mjs",
+    "admin:create": "node scripts/create-admin.mjs",
+    "admin:reset-link": "node scripts/reset-link.mjs",
+    "test:api": "node tests/api.test.mjs",
+    "test:e2e": "node tests/e2e.test.mjs",
+    "render:assets": "node scripts/render/render-assets.mjs"
+  },
+  "dependencies": {
+    "@electric-sql/pglite": "0.2.14",
+    "@fontsource-variable/instrument-sans": "5.1.0",
+    "@fontsource-variable/unbounded": "5.1.0",
+    "@fontsource/ibm-plex-mono": "5.1.0",
+    "bcryptjs": "2.4.3",
+    "drizzle-orm": "0.36.4",
+    "next": "14.2.35",
+    "pg": "8.13.1",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "server-only": "^0.0.1",
+    "three": "0.169.0",
+    "zod": "3.23.8"
+  },
+  "devDependencies": {
+    "drizzle-kit": "0.28.1",
+    "playwright": "1.56.1"
+  },
+  "engines": {
+    "node": ">=18.18"
+  }
+}
