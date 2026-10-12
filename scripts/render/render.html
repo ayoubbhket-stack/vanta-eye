@@ -1,0 +1,95 @@
+<!doctype html><html><head><meta charset="utf-8">
+<script type="importmap">{"imports":{"three":"/node_modules/three/build/three.module.js","three/addons/":"/node_modules/three/examples/jsm/"}}</script>
+<style>html,body{margin:0;background:#000}</style></head><body>
+<script type="module">
+import * as THREE from 'three';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
+import { buildGlasses, makeStudioEnv } from '/src/lib/three/glasses.js';
+
+const W = 1100, H = 1100;
+const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+renderer.setPixelRatio(1); renderer.setSize(W, H);
+renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.05;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+document.body.appendChild(renderer.domElement);
+const envTex = makeStudioEnv(THREE, renderer);
+
+function bgTexture(kind) {
+  const c = document.createElement('canvas'); c.width = c.height = 1024;
+  const g = c.getContext('2d');
+  g.fillStyle = kind === 'light' ? '#1c1c1c' : '#0b0b0b'; g.fillRect(0,0,1024,1024);
+  const r = g.createRadialGradient(kind==='side'?700:512, 640, 20, 512, 640, 620);
+  r.addColorStop(0, kind==='side' ? 'rgba(255,106,0,0.55)' : 'rgba(255,106,0,0.32)');
+  r.addColorStop(0.45, 'rgba(255,106,0,0.08)'); r.addColorStop(1, 'rgba(0,0,0,0)');
+  g.fillStyle = r; g.fillRect(0,0,1024,1024);
+  // fine grain
+  const d = g.getImageData(0,0,1024,1024); for (let i=0;i<d.data.length;i+=4){const n=(Math.random()-0.5)*7; d.data[i]+=n;d.data[i+1]+=n;d.data[i+2]+=n;} g.putImageData(d,0,0);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
+}
+
+function makeScene(opts) {
+  const scene = new THREE.Scene();
+  scene.environment = envTex;
+  scene.background = bgTexture(opts.bg || 'front');
+  const key = new THREE.DirectionalLight(0xffffff, 1.6); key.position.set(-6, 8, 10); scene.add(key);
+  const rim = new THREE.PointLight(0xff6a00, 140, 60); rim.position.set(9, -2, -4); scene.add(rim);
+  const fill = new THREE.PointLight(0xff8a30, 40, 40); fill.position.set(0, -7, 6); scene.add(fill);
+  return scene;
+}
+
+window.renderShot = (opts) => {
+  renderer.setSize(W, H);
+  const scene = makeScene(opts);
+  const g = buildGlasses(THREE, opts);
+  scene.add(g);
+  const cam = new THREE.PerspectiveCamera(opts.fov || 26, W / H, 0.1, 200);
+  const a = opts.angle || 'front';
+  if (a === 'front') { g.rotation.set(0.12, -0.42, 0.02); cam.position.set(0, 1, 39); }
+  else if (a === 'side') { g.rotation.set(0.1, -0.85, 0.04); cam.position.set(0, 1, 40); }
+  else if (a === 'top') { g.rotation.set(0.85, -0.25, -0.12); cam.position.set(0, 0, 44); }
+  else if (a === 'hero') { g.rotation.set(0.2, 0.55, -0.12); cam.position.set(0, 0, 40); }
+  // auto-frame the rotated model
+  g.updateMatrixWorld(true);
+  const box = new THREE.Box3().setFromObject(g);
+  const c = box.getCenter(new THREE.Vector3()); const sz = box.getSize(new THREE.Vector3());
+  const fit = (Math.max(sz.x, sz.y) / 2) / Math.tan(THREE.MathUtils.degToRad(cam.fov / 2));
+  const dist = fit * (opts.pad || 1.08) + sz.z * 0.3;
+  cam.position.set(c.x, c.y + 0.4, c.z + dist);
+  cam.lookAt(c.x, c.y + 0.9, c.z);
+  renderer.render(scene, cam);
+  return renderer.domElement.toDataURL('image/jpeg', 0.88);
+};
+
+window.renderScene = (o) => {
+  renderer.setSize(o.w || 1600, o.h || 1000);
+  const scene = makeScene({ bg: o.bg || 'front' });
+  for (const it of o.items) {
+    const g = buildGlasses(THREE, it);
+    g.position.set(...(it.pos || [0,0,0])); g.rotation.set(...(it.rot || [0,0,0]));
+    if (it.scale) g.scale.setScalar(it.scale);
+    scene.add(g);
+  }
+  for (const f of (o.shapes || [])) {
+    let geo = f.kind === 'ring' ? new THREE.TorusGeometry(f.r || 3, f.t || 0.25, 24, 96)
+      : f.kind === 'box' ? new THREE.BoxGeometry(f.r, f.r, f.r) : new THREE.IcosahedronGeometry(f.r || 2, f.detail ?? 0);
+    const mat = f.glass ? new THREE.MeshPhysicalMaterial({ color: '#e8e8e8', metalness: 1, roughness: 0.04, clearcoat: 1, envMapIntensity: 1.6, iridescence: 0.8, iridescenceIOR: 1.8 })
+      : new THREE.MeshPhysicalMaterial({ color: f.color || '#ff6a00', metalness: 0.6, roughness: 0.25, clearcoat: 1, emissive: f.emissive || '#000000' });
+    const m = new THREE.Mesh(geo, mat); m.position.set(...f.pos); m.rotation.set(...(f.rot || [0,0,0])); scene.add(m);
+  }
+  const cam = new THREE.PerspectiveCamera(o.fov || 28, (o.w || 1600) / (o.h || 1000), 0.1, 300);
+  cam.position.set(...(o.cam || [0, 0, 40])); cam.lookAt(...(o.look || [0,0,0]));
+  renderer.render(scene, cam);
+  const url = renderer.domElement.toDataURL('image/jpeg', 0.86);
+  renderer.setSize(W, H);
+  return url;
+};
+window.exportGLB = (opts) => new Promise((res, rej) => {
+  const g = buildGlasses(THREE, opts);
+  new GLTFExporter().parse(g, (buf) => {
+    const bytes = new Uint8Array(buf); let s = ''; for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
+    res(btoa(s));
+  }, rej, { binary: true });
+});
+window.ready = true;
+</script></body></html>
